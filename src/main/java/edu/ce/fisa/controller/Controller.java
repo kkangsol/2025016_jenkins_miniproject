@@ -18,6 +18,6 @@ public class Controller {
 	//http://localhost:8080
 	@PostMapping("/post")
 	public String getReqRes2() {
-		return "post 방식 요청의 응답 데이터 : 조은";
+		return "post 방식 요청의 응답 데이터 : 조은화팅";
 	}
 }
