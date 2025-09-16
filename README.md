@@ -327,6 +327,7 @@ journalctl -u watch-jar.service -f
 
 ## ⚡ 동작 흐름
 
+
 1. GitHub에 코드 푸시합니다.
 2. Jenkins(컨테이너)이 `.jar`를 자동으로 빌드해줍니다.
 3. 컨테이너 내부 경로(`/var/jenkins_home/...`)에서 호스트 바인드 마운트 경로로 프로젝트 파일이 실시간 반영됩니다.
