@@ -4,6 +4,10 @@
 
 이 프로젝트는 Gradle로 빌드된 Java 애플리케이션을 **Jenkins와 Docker를 사용하여 자동으로 빌드하고 배포하는 CI/CD 파이프라인을 구축하는 것**을 목표로 합니다. GitHub Webhook을 통해 소스 코드 변경을 감지하고, Jenkins 파이프라인이 이를 자동으로 빌드하여 Docker 컨테이너에서 실행합니다.
 
+#### 🗺️ 아키텍처 구성
+<img width="4228" height="2164" alt="자동CICD" src="https://github.com/user-attachments/assets/a2188e3d-d07c-4a51-89b9-30afb85424e3" />
+
+
 ---
 
 ## 🚀 Jenkins 사용 목적
