@@ -28,6 +28,7 @@
 |<img width="2914" height="940" alt="image" src="https://github.com/user-attachments/assets/f5a39f29-2e9d-4f00-b452-1d6dba6eade8" />|3. **터널 실행**<br> Jenkins가 8080 포트를 사용하고 있으므로, 아래 명령어를 실행하여 로컬 8080 포트에 대한 터널을 엽니다. <br>`ngrok http 8080` |
 
 ---
+<br>
 
 ## 🛠️ 실행 방법
 
@@ -152,4 +153,193 @@ pipeline {
 | <img height="450" alt="image" src="https://github.com/user-attachments/assets/d8d74608-0ae5-4cf9-b9fe-e20004c5330c" />|
 | <img height="40" alt="image" src="https://github.com/user-attachments/assets/d9cae6b3-d6e4-4d0d-bf32-650d9bac3e59" />|
 
+---
 
+# 자동실행 구현
+### 🏗️ 전체 구조도
+
+```
+[GitHub Push]
+     ↓ (Webhook)
+[Jenkins 컨테이너]
+ ──────────────┐
+  └─ 코드 빌드 → /var/jenkins_home/workspace/.../build/libs/step04_gradleBuild-0.0.1-SNAPSHOT.jar
+                 (호스트에 **바인드 마운트**로 공유됨)
+                               │
+                               ▼
+             [호스트 머신 - systemd 서비스로 등록된 watch-jar.sh]
+                               │
+                ├─ 기존 서버 종료 (포트 기반)
+                └─ 새로운 jar 자동 실행 (java -jar)
+
+```
+
+- Jenkins 컨테이너는 `.jar`를 컨테이너 내부에 생성
+- 이 경로가 **호스트 디렉터리에 바인드 마운트**되어 있어서
+    
+    호스트에서도 동일 경로로 `.jar` 파일 접근 가능
+    
+- 호스트에서 `inotifywait` 기반 스크립트가 변경을 감지해 자동 실행
+
+
+
+## 📦 설치 및 설정
+
+### 1. inotify-tools 설치 (호스트)
+
+```bash
+sudo apt-get update && sudo apt-get install -y inotify-tools
+
+```
+
+
+### 2. 감시 스크립트 생성 (호스트)
+
+`~/scripts/watch-jar.sh` 파일 생성:
+
+```bash
+#!/bin/bash
+TARGET_JAR="/호스트/바인드경로/step03_teamArt/build/libs/step04_gradleBuild-0.0.1-SNAPSHOT.jar"
+TARGET_PORT=8282
+
+inotifywait -m -e close_write "$TARGET_JAR" | while read path action file; do
+    echo "🔁 JAR 변경 감지: $file ($action)"
+
+    # 1. 기존 서버 종료 (포트 기반)
+    OLD_PID=$(lsof -ti tcp:$TARGET_PORT)
+    if [ -n "$OLD_PID" ]; then
+        echo "🛑 포트 $TARGET_PORT 사용 중인 PID: $OLD_PID → 종료 중"
+        kill -15 "$OLD_PID"
+        sleep 5
+        if kill -0 "$OLD_PID" 2>/dev/null; then
+            echo "⚠️ 정상 종료 실패 → 강제 종료"
+            kill -9 "$OLD_PID"
+        fi
+        echo "✅ 기존 서버 종료 완료"
+    fi
+
+    # 2. 새 서버 실행
+    echo "🚀 새로운 JAR 실행 시작"
+    nohup java -jar "$TARGET_JAR" > server.log 2>&1 &
+    echo "🌟 새 서버 PID: $!"
+done
+
+```
+
+```bash
+chmod +x ~/scripts/watch-jar.sh
+
+```
+
+- `TARGET_JAR` : 호스트 기준 바인드 마운트 경로
+- `TARGET_PORT` : Spring Boot 애플리케이션 포트
+
+---
+
+### 3. systemd 서비스 등록
+
+`/etc/systemd/system/watch-jar.service` 생성:
+
+```bash
+sudo nano /etc/systemd/system/watch-jar.service
+
+```
+
+```
+[Unit]
+Description=Watch JAR and restart on change
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu
+ExecStart=/home/ubuntu/scripts/watch-jar.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
+```
+
+> User=ubuntu, ExecStart 경로는 실제 계정과 경로에 맞게 변경
+> 
+
+
+### 4. 서비스 활성화 및 시작
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now watch-jar.service
+
+```
+
+- 부팅 시 자동 시작
+- 지금 즉시 실행됨
+
+---
+
+### 5. 상태 및 로그 확인
+
+```bash
+systemctl status watch-jar.service
+journalctl -u watch-jar.service -f
+```
+
+## ⚡ 동작 흐름
+
+1. GitHub에 코드 푸시
+2. Jenkins(컨테이너)이 `.jar` 빌드
+3. 컨테이너 내부 경로(`/var/jenkins_home/...`) → 호스트 바인드 마운트 경로로 실시간 반영
+4. 호스트의 `watch-jar.sh`(systemd 서비스)가 `.jar` 변경 감지
+5. 기존 서버 종료 후 새 `.jar`로 자동 실행
+
+---
+
+## 트러블슈팅 🔥
+### ⚠️ 문제 증상
+
+- `.jar` 변경 시 새 서버 실행 → `Port already in use` 에러 발생
+- 기존 서버가 여전히 포트 점유 중
+
+### ⚡ 원인
+
+- 초기에 사용한 방식은 PID 추적 기반:
+
+```bash
+CURRENT_PID=""
+...
+java -jar "$TARGET_JAR" &
+CURRENT_PID=$!
+
+```
+
+- `$!`는 **마지막 실행한 백그라운드 프로세스 하나만 추적**
+- 하지만 Spring Boot 앱은 내부적으로 여러 스레드/자식 프로세스 생성 → `kill $CURRENT_PID`만으로는 완전 종료 안 됨
+- 기존 인스턴스가 그대로 살아있어 포트 충돌 발생
+
+### ✅ 해결
+
+- PID 추적 대신 **포트 기반 종료 방식**으로 변경:
+
+```bash
+OLD_PID=$(lsof -ti tcp:$TARGET_PORT)
+kill -15 "$OLD_PID" && sleep 5
+kill -9 "$OLD_PID"  # 필요 시 강제종료
+
+```
+
+- 항상 포트 점유 프로세스를 먼저 종료 → 새 `.jar` 실행
+
+---
+
+## 📈 발전 방향 (Improvement Plan)
+
+- **로그 관리 고도화**
+    - logrotate로 `server.log` 용량 관리
+    - Prometheus + Grafana 로 서버 상태 모니터링
+- **무중단 배포 지원**
+    - `docker run`으로 `.jar` 컨테이너화 → Blue-Green 배포 적용
+- **PID 파일 기반 종료로 변경**
+    - 포트가 아닌 PID 파일을 직접 관리해 더 안전한 종료 보장
