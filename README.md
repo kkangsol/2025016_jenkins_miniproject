@@ -81,6 +81,42 @@ docker run -d   -p 8080:8080
 --name myjenkins2   jenkins/jenkins:lts-jdk17
 ```
 
+### 🔎 명령어 상세 설명
+
+- **`docker run`**
+    
+    새로운 Docker 컨테이너를 생성하고 실행하는 명령어입니다.
+    
+    Jenkins 서버를 독립적인 컨테이너 환경에서 띄우기 위해 사용합니다.
+    
+- **`d` (detach 모드)**
+    
+    컨테이너를 **백그라운드**에서 실행합니다.
+    
+    터미널에 로그가 붙잡히지 않고, 컨테이너는 계속 실행 상태를 유지합니다.
+    
+    Jenkins 서버는 상시 실행이 필요하기 때문에 `-d` 옵션이 필수적입니다.
+    
+- **`p 8080:8080` (포트 매핑)**
+    - **앞(호스트): 8080** → Ubuntu 서버(호스트)의 포트 번호
+    - **뒤(컨테이너): 8080** → Jenkins 컨테이너 내부에서 웹 UI가 서비스되는 포트
+        
+        이 설정 덕분에 호스트 브라우저에서 `http://<호스트IP>:8080`으로 Jenkins UI 접속이 가능합니다.
+        
+- **`v /home/ubuntu/jenkins_home:/var/jenkins_home` (바인드 마운트)**
+    - 왼쪽: `/home/ubuntu/jenkins_home` → **호스트(우분투)** 디렉토리
+    - 오른쪽: `/var/jenkins_home` → **컨테이너 내부 Jenkins 기본 데이터 경로**
+        
+        이 매핑을 통해 Jenkins 플러그인, Job 설정, 빌드 기록 같은 데이터가 호스트에 저장됩니다.
+        
+        따라서 컨테이너를 삭제하거나 재배포하더라도 Jenkins 데이터가 유지됩니다.
+        
+- **`-name myjenkins2`**
+    
+    컨테이너의 이름을 `myjenkins2`로 지정합니다.
+    
+    컨테이너 이름은 이후 관리 명령어(`docker ps`, `docker logs myjenkins2`, `docker stop myjenkins2`)에서 편하게 식별하기 위함입니다.
+
 ### 3. Jenkins에서 Pipeline Job 생성
 
 1. Jenkins에 접속하여 **새로운 Item**을 생성하고 **Pipeline**을 선택합니다. (예: `step03_teamArt`)
