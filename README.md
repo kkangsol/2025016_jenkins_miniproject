@@ -86,4 +86,70 @@ docker run -d   -p 8080:8080
 | -- | -- | -- |
 | <img width="1472" height="558" alt="image" src="https://github.com/user-attachments/assets/d723d5fd-3c74-45c9-87e4-56aac3a7ce76" />|<img width="2564" height="580" alt="image" src="https://github.com/user-attachments/assets/65d149c4-4dfa-4310-94ad-470400bf3d23" /> | <img width="922" height="333" alt="image" src="https://github.com/user-attachments/assets/f6c64476-0750-49a6-a4a8-a794f48c605b" /> |
 
+4. pipeline 스크립트 파일 작성
+```shell
+pipeline {
+    agent any
+    environment {
+        GITHUB_REPO = '{git repository url}'
+        BRANCH_NAME = 'main'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: "${BRANCH_NAME}", url: "${GITHUB_REPO}"
+                
+                echo '**********'
+                sh 'ls -al'  
+                echo '**********'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                script {
+                    if (fileExists('gradlew')) {
+                        sh 'chmod +x gradlew'
+                        sh './gradlew build'
+                    } else if (fileExists('pom.xml')) {
+                        sh 'mvn clean package'   
+                    } else {
+                        error 'Gradle 또는 Maven 프로젝트가 아님'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ 빌드 성공!'
+        }
+        failure {
+            echo '❌ 빌드 실패! 오류 확인 필요!'
+        }
+    }
+}
+```
+
+### 4. 파이프라인 실행 및 JAR 파일 확인
+
+1. GitHub 저장소에 코드를 푸시하여 빌드를 트리거하거나, Jenkins에서 **Build Now**를 클릭합니다.
+
+| 빌드 시작 | 빌드 성공 |
+| ------- | ------- |
+|<img width="1871" height="722" alt="image" src="https://github.com/user-attachments/assets/6ba8e36f-e762-4b18-a5d4-af32ae8ce603" />|<img width="1432" height="558" alt="image" src="https://github.com/user-attachments/assets/bb6b3566-ecc6-49a3-879a-c76ef363fdef" />|
+2. 파이프라인이 성공적으로 완료되면, `.jar` 파일이 Jenkins 서버(호스트)의 지정된 마운트 폴더에 생성됩니다.
+3. 아래 명령어로 Jenkins를 실행하고 있는 컨테이너로 진입합니다.
+- `docker exec -it {컨테이너 이름 or 컨테이너 ID} bash`
+4. 정상적으로 자바 프로젝트가 동작하는지 최종 확인합니다.
+- `java -jar {jar 파일 이름}`
+- `curl http://localhost:8282/app/get`
+
+| 결과 사진 |
+| ------- |
+| <img height="450" alt="image" src="https://github.com/user-attachments/assets/d8d74608-0ae5-4cf9-b9fe-e20004c5330c" />|
+| <img height="40" alt="image" src="https://github.com/user-attachments/assets/d9cae6b3-d6e4-4d0d-bf32-650d9bac3e59" />|
+
 
