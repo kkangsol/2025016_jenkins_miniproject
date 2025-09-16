@@ -324,7 +324,6 @@ journalctl -u watch-jar.service -f
 <br><br>
 
 
-
 ## ⚡ 동작 흐름
 
 
@@ -333,6 +332,9 @@ journalctl -u watch-jar.service -f
 3. 컨테이너 내부 경로(`/var/jenkins_home/...`)에서 호스트 바인드 마운트 경로로 프로젝트 파일이 실시간 반영됩니다.
 4. 호스트의 `watch-jar.sh`(systemd 서비스)가 `.jar` 변경 감지합니다.
 5. 기존 서버 종료 후 새 `.jar`로 자동 실행합니다.
+  
+<img width="614" height="113" alt="image" src="https://github.com/user-attachments/assets/fe077320-5144-453b-9c35-586259fb9df8" />
+
 
 ---
 
